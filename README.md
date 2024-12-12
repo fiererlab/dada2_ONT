@@ -4,24 +4,23 @@
 *This tutorial was made by Cliff Bueno de Mesquita based on the original
 MiSeq dada2 tutorial created by Angela Oliverio and Hannah
 Holland-Moritz. It is currently maintained by Cliff Bueno de Mesquita*  
-*Updated November 20th, 2024*
+*Updated December 11th, 2024*
 
 This pipeline runs the dada2 workflow for Big Data (single-end) from
 RStudio on the microbe server. This is for sequencing data from the ONT
 MinION machine, not the Illumina MiSeq. For the MiSeq pipeline, see
 <https://github.com/fiererlab/dada2_fiererlab>. In this pipeline, we
-start with demultiplexed files, one fastq per sample. There are 8
-samples (1 NTC and 7 replicates). We sequenced the known Zymo Community
-standard that contains 8 bacterial species so we could make sure the
-output matched the known community composition. For more information,
-see
-<https://www.zymoresearch.com/collections/zymobiomics-microbial-community-standards/products/zymobiomics-microbial-community-standard>
-We recommend using ONT’s dorado program to demultiplex the reads live
-during the run based on super accurate (sup) basecalling. DO NOT use
-DADA2 if you did not perform super accurate basecalling, as the error
-rate will be too high. If you did not demultiplex live with dorado, you
-can also do it after the run or even use a different program such as
-pheniqs for the demultiplexing, but that will not be covered here.
+start with a fastq file from the MinION that has been basecalled with
+super accurate basecalling. There are 8 samples (1 NTC and 7
+replicates). We sequenced the known Zymo Community standard that
+contains 8 bacterial species so we could make sure the output matched
+the known community composition. For more information, see
+<https://www.zymoresearch.com/collections/zymobiomics-microbial-community-standards/products/zymobiomics-microbial-community-standard>.
+DO NOT use DADA2 if you did not perform super accurate basecalling, as
+the error rate will be too high. We will first use cutadapt to trim
+outer adapters and reorient the reads so they are in the same direction.
+Then we will use dorado to demultiplex the the reads into their separate
+samples using barcodes.
 
 We suggest opening the dada2 tutorial online to understand more about
 each step. The original pipeline on which this tutorial is based can be
@@ -130,7 +129,9 @@ If you are running it on your own computer (runs slower!):
     it to your computer. Unzip the file to access the R-script.
 2.  Download the tutorial data from here
     <http://cme.colorado.edu/projects/bioinformatics-tutorials>
-3.  Install NanoPlot, cutadapt, chopper.
+3.  Install dorado, NanoPlot, cutadapt, chopper.
+    - dorado can be downloaded from
+      <https://github.com/nanoporetech/dorado>
     - NanoPlot can be installed with pip (pip install NanoPlot)
     - chopper can be installed with conda (conda create -n chopper_env
       -c bioconda chopper)
@@ -170,6 +171,9 @@ install.packages("plotly")
 install.packages("rlang")
 install.packages("R.utils")
 install.packages("tibble")
+install.packages("microseq")
+install.packages("readxl")
+install.packages("writexl")
 ```
 
 Load DADA2 and required packages
@@ -195,6 +199,12 @@ library(R.utils); packageVersion("R.utils") # for gzip
 ## [1] '2.12.3'
 library(tibble); packageVersion("tibble") # for row names
 ## [1] '3.2.1'
+library(microseq); packageVersion("microseq") # for writing fasta files
+## [1] '2.1.6'
+library(readxl); packageVersion("readxl") # for reading .xlsx files
+## [1] '1.4.3'
+library(writexl); packageVersion("writexl") # for writing .xlsx files
+## [1] '1.5.1'
 ```
 
 Once the packages are installed, you can check to make sure the
@@ -214,6 +224,11 @@ forward read. The data for these samples can be found on the CME
 website. <http://cme.colorado.edu/projects/bioinformatics-tutorials>
 
 ``` r
+# Set up pathway to dorado (demultiplexing tool) and test
+# If you don't know the path, in the terminal run "which NanoPlot"
+dorado <- "/data/cliffb/dorado-0.8.2-linux-x64/bin/dorado" # CHANGE ME to your path
+system2(dorado, args = "--version") # Check by running shell command from R
+
 # Set up pathway to NanoPlot (QC tool) and test
 # If you don't know the path, in the terminal run "which NanoPlot"
 NanoPlot <- "/data/cliffb/miniforge3/bin/NanoPlot" # CHANGE ME to your path
@@ -230,14 +245,8 @@ system2(chopper, args = "--version")
 cutadapt <- "/data/cliffb/miniforge3/envs/cutadapt_env/bin/cutadapt" # CHANGE ME to your path
 system2(cutadapt, args = "--version") # Check by running shell command from R
 
-# Set path to the input data, in this case a directory with demultiplexed reads from the MinION
-data.fp <- "/data/shared/Nanopore/Zymo_positive_control_10_28_2024/demux"
-
-# List all files in shared folder to check path
-list.files(data.fp)
-## [1] "NTC.fastq.gz"         "Replicate_1.fastq.gz" "Replicate_2.fastq.gz"
-## [4] "Replicate_3.fastq.gz" "Replicate_4.fastq.gz" "Replicate_5.fastq.gz"
-## [7] "Replicate_6.fastq.gz" "Replicate_7.fastq.gz"
+# Set path to the input data, in this case a fastq of super accurate basecalls
+data.fp <- "/data/shared/Nanopore/Zymo_positive_control_10_28_2024/no_sample_id/20241028_1235_MN47817_FAZ82726_9877d59a/sup_calls.fastq.gz"
 ```
 
 Set up file paths in YOUR directory where you want data; you do not need
@@ -256,6 +265,7 @@ Qcut.fp <- file.path(project.fp, "Qcut") # NanoPlot files, cutadapt primer trim
 Qfiltered.fp <- file.path(project.fp, "Qfiltered") # NanoPlot files, final filter and trim
 preprocess.fp <- file.path(project.fp, "01_preprocess")
     reorient.fp <- file.path(preprocess.fp, "reorient")
+    demux.fp <- file.path(preprocess.fp, "demux")
     chopper.fp <- file.path(preprocess.fp, "chopper")
     filtN.fp <- file.path(preprocess.fp, "filtN")
     trimmed.fp <- file.path(preprocess.fp, "trimmed")
@@ -265,27 +275,27 @@ filter.fp <- file.path(project.fp, "02_filter")
 table.fp <- file.path(project.fp, "03_tabletax") 
 ```
 
-## Pre-processing data for dada2 - reorient reads and trim outer adapters with cutadapt, filter by read length and minimum Q score with chopper, remove sequences with Ns, trim primers with cutadapt
+## Pre-processing data for dada2 - reorient reads and trim outer adapters with cutadapt, demultiplex with dorado, filter by read length and minimum Q score with chopper, remove sequences with Ns with DADA2, trim primers with cutadapt
 
 #### Check starting quality
 
 ``` r
-# Before we even begin, let's check the quality and read length distributions of our starting demultiplexed data
+# Before we even begin, let's check the quality and read length distributions of our starting data
 # If it is taking a long time to run, you can increase the number of cores (-t argument)
 # By default we are using 8 cores
-args <- c("-t", "8", "--fastq", paste0(data.fp, "/*.fastq.gz"), "-o", Qstart.fp, "--no_static", "--plots", "dot")
+args <- c("-t", "8", "--fastq", data.fp, "-o", Qstart.fp, "--no_static", "--plots", "dot")
 system2(NanoPlot, args = args)
 stats_start <- read.delim(paste0(Qstart.fp, "/NanoStats.txt"))
 head(stats_start, n = 8)
-##                           General.summary.
-## 1 Mean read length:                  328.9
-## 2 Mean read quality:                  22.0
-## 3 Median read length:                328.0
-## 4 Median read quality:                25.6
-## 5 Number of reads:             1,263,889.0
-## 6 Read length N50:                   328.0
-## 7 STDEV read length:                  31.1
-## 8 Total bases:               415,703,629.0
+##                            General.summary.
+## 1 Mean read length:                   492.6
+## 2 Mean read quality:                   14.9
+## 3 Median read length:                 421.0
+## 4 Median read quality:                 16.4
+## 5 Number of reads:              2,066,815.0
+## 6 Read length N50:                    428.0
+## 7 STDEV read length:                3,450.4
+## 8 Total bases:              1,018,165,033.0
 
 # You may also want to scp that directory to your computer to look at the output plots
 # LengthvsQualityScatterPlot_dot.html gives a nice overview of the read lengths and quality score distributions
@@ -295,39 +305,33 @@ head(stats_start, n = 8)
 
 #### Reorient reads and trim outer adapters
 
-If you use dorado demultiplexing, your data will come off the machine
-demultiplexed but not necessarily oriented the same way. If you don’t
-use dorado live demultiplexing, you can do so after the run. If you use
-another program such as pheniqs, porechop, or cutadapt for
-demultiplexing, you will probably first want to reorient your reads. We
-can reorient the reads using cutadapt and our knowledge of the adapter
+The reads coming off of the MinION are not all oriented the same way.
+We’ll first reorient the reads, and then demultiplex them. We can
+reorient the reads using cutadapt and our knowledge of the adapter
 constructs. For 16S, 18S, and ITS, the information is on the Earth
 Microbiome Project site
 <https://earthmicrobiome.org/protocols-and-standards/>.
 
-Note: The tutorial data were not demultiplexed live with dorado. They
-were first reoriented with cutadapt and then demultiplexed with pheniqs.
-So in this tutorial this step is unneccesary and 100% of reads pass, but
-on real data it is necessary and not all reads will pass. Actually, all
-reads are retained with this particular command, but you can see from
-the verbose cutadapt program output how many reads actually had the
-adapter constructs.
+Note: All reads are retained with this particular command, but you can
+see from the verbose cutadapt program output how many reads actually had
+the adapter constructs. Keep that in mind because probably only reads
+with the adapter constructs will be able to be demultiplexed.
 
 ``` r
 # Get the input files
-fnFs <- sort(list.files(data.fp, pattern=".fastq.gz", full.names = TRUE))
+fnF <- data.fp
 
 # Make the output directory and paths
 if (!dir.exists(preprocess.fp)) dir.create(preprocess.fp)
 if (!dir.exists(reorient.fp)) dir.create(reorient.fp)
-fnFs.reorient <- file.path(reorient.fp, basename(fnFs))
+fnF.reorient <- file.path(reorient.fp, basename(fnF))
 
 # Use the construct information and cutadapt to reorient reads to the same direction and trim the outer adapters
 # These are 16S Illumina constructs from the EMP website
 # The first sequence is N for barcode, then forward primer pad, linker, and primer
 # The second sequence is the reverse complement of the reverse primer pad, linker, and primer
 # min_overlap is set to the exact number of bases in the construct
-# Run cutadapt on each demultiplexed file
+# Run cutadapt on the super accurate basecalling fastq file
 # This is tricky because we need a single quote around this -g argument, so make separately
 adapter <- paste0(
   "'",
@@ -336,16 +340,94 @@ adapter <- paste0(
 )
 R1.flags <- paste("-g", 
                   adapter,
-                  "-e", 0.2)
-for (i in seq_along(fnFs)) {
-  system2(cutadapt, args = c(R1.flags, 
-                             "--action=retain",
-                             "--buffer-size=1000000000",
-                             "--cores=16",
-                             "--revcomp",
-                             "-o", fnFs.reorient[i], 
-                             fnFs[i]))
+                  "-e", 0.2) # Allow 0.2 error rate
+system2(cutadapt, args = c(R1.flags, 
+                           "--action=retain",
+                           "--buffer-size=1000000000",
+                           "--cores=16", # Use 16 cores for speed
+                           "--revcomp", 
+                           "-o", fnF.reorient, # Output 
+                           fnF)) # Input
+```
+
+#### Demultiplex reads
+
+Use dorado to match barcodes and make separate files for each sample.
+First we will need to take the list of barcodes and sample IDs and turn
+it into a fasta file. We will make a list of generic names BC001, BC002
+etc. and write another mapping file for how those map to the original
+sample IDs. Then you’ll need to make or adjust the arrangement .toml
+file according to the settings you want and how many barcodes you have.
+Then, run dorado.
+
+``` r
+# Function for making the files
+make_demux_files <- function(file) {
+  mf <- readxl::read_xlsx(file, sheet = 1, col_names = FALSE) %>%
+    rlang::set_names(c("Sequence", "sampleID")) %>%
+    dplyr::mutate(barcodeID = sprintf("BC%03d", seq_along(1:nrow(.))))
+  fa <- mf %>%
+    dplyr::select(barcodeID, Sequence) %>%
+    dplyr::rename(Header = barcodeID)
+  microseq::writeFasta(fa, paste0(project.fp, "/barcodes.fasta"))
+  writexl::write_xlsx(mf, paste0(project.fp, "/barcode_map.xlsx"), format_headers = F)
 }
+
+# Make barcodes.fasta and barcodes_map.xlsx
+# mapping file path - Replace me with your barcode/sample ID mapping file path!
+file <- "/data/shared/Nanopore/Zymo_positive_control_10_28_2024/11.01.2024_PositiveControl_MappingFile.xlsx"
+make_demux_files(file = file)
+
+# Make your .toml arrangements file, put it on microbe (probably project.fp), and save the file path
+toml.fp <- paste0(project.fp, "/barcode_arrangement.toml")
+
+# Save the barcodes.fasta file path
+barcodes.fp <- paste0(project.fp, "/barcodes.fasta")
+
+# Set flags and run dorado
+dorado.flags <- paste("demux", # demux function
+                      fnF.reorient, # Input
+                      "--output-dir", demux.fp, # Output
+                      "--threads", 16, # Number of threads. Increase for speed.
+                      "--verbose", # Print progress
+                      "--emit-fastq", # Output as fastq
+                      "--no-trim", # Don't trim the barcodes. We'll do that later
+                      "--barcode-arrangement", toml.fp, # Parameters
+                      "--barcode-sequences", barcodes.fp) # Fasta with barcodes
+system2(dorado, args = dorado.flags)
+```
+
+``` r
+### Clean up demux files
+demux_files <- list.files(demux.fp)
+
+# Delete the unclassified reads (should be the last file)
+unlink(paste0(demux.fp, "/", demux_files[length(demux_files)]), recursive = TRUE)
+
+# Trim and adjust the file names to match the barcode_map.xlsx names
+demux_files <- list.files(demux.fp)
+demux_rename <- substr(demux_files,
+                       start = nchar(demux_files) - 15,
+                       stop = nchar(demux_files))
+demux_rename <- gsub(pattern = "barcode",
+                     replacement = "BC",
+                     x = demux_rename)
+
+# Rename
+file.rename(from = list.files(demux.fp, full.names = TRUE),
+            to = paste0(demux.fp, "/", demux_rename))
+## [1] TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE
+
+# Check
+list.files(demux.fp)
+## [1] "BC001.fastq" "BC002.fastq" "BC003.fastq" "BC004.fastq" "BC005.fastq"
+## [6] "BC006.fastq" "BC007.fastq" "BC008.fastq"
+
+# Gzip these to save space
+system2("gzip", list.files(demux.fp, full.names = TRUE))
+
+# Now save file objects for downstream steps.
+fnFs <- sort(list.files(demux.fp, pattern=".fastq.gz", full.names = TRUE))
 ```
 
 #### Pre-filter to a length range and minimum average quality, remove reads with Ns
@@ -373,27 +455,25 @@ fnFs.chopper <- gsub(".gz", "", fnFs.chopper) # Output is unzipped
 
 for (i in seq_along(fnFs)) {
   system2(chopper, 
-          args = c("-i", fnFs.reorient[i],
-                   "-t", 8,
-                   "-q", 30,
-                   "--minlength", 250,
-                   "--maxlength", 400),
-          stdout = fnFs.chopper[i])
+          args = c("-i", fnFs[i], # Input
+                   "-t", 8, # Threads. Increase for speed.
+                   "-q", 30, # Minimum quality score
+                   "--minlength", 250, # Minimum read length
+                   "--maxlength", 400), # Maximum read length
+          stdout = fnFs.chopper[i]) # Output
 }
 
 # Now recompress the files with gzip
 list.files(chopper.fp)
-## [1] "NTC.fastq"         "Replicate_1.fastq" "Replicate_2.fastq"
-## [4] "Replicate_3.fastq" "Replicate_4.fastq" "Replicate_5.fastq"
-## [7] "Replicate_6.fastq" "Replicate_7.fastq"
+## [1] "BC001.fastq" "BC002.fastq" "BC003.fastq" "BC004.fastq" "BC005.fastq"
+## [6] "BC006.fastq" "BC007.fastq" "BC008.fastq"
 for (i in seq_along(fnFs)) {
   gzip(filename = fnFs.chopper[i],
        destname = paste0(fnFs.chopper[i], ".gz"))
 }
 list.files(chopper.fp)
-## [1] "NTC.fastq.gz"         "Replicate_1.fastq.gz" "Replicate_2.fastq.gz"
-## [4] "Replicate_3.fastq.gz" "Replicate_4.fastq.gz" "Replicate_5.fastq.gz"
-## [7] "Replicate_6.fastq.gz" "Replicate_7.fastq.gz"
+## [1] "BC001.fastq.gz" "BC002.fastq.gz" "BC003.fastq.gz" "BC004.fastq.gz"
+## [5] "BC005.fastq.gz" "BC006.fastq.gz" "BC007.fastq.gz" "BC008.fastq.gz"
 
 # Remake names for next step
 fnFs.chopper <- file.path(preprocess.fp, "chopper", basename(fnFs))
@@ -408,10 +488,10 @@ head(stats_chopper, n = 8)
 ## 2 Mean read quality:                  34.0
 ## 3 Median read length:                328.0
 ## 4 Median read quality:                34.8
-## 5 Number of reads:               382,544.0
+## 5 Number of reads:               382,532.0
 ## 6 Read length N50:                   328.0
 ## 7 STDEV read length:                   0.9
-## 8 Total bases:               125,407,900.0
+## 8 Total bases:               125,403,590.0
 
 # Check the total number of reads now. If you use a high minQ like Q30, a lot of reads will be filtered out
 # In this example, using minQ = 30 filtered out about ~70% of reads.
@@ -445,10 +525,10 @@ head(stats_filtN, n = 8)
 ## 2 Mean read quality:                  34.0
 ## 3 Median read length:                328.0
 ## 4 Median read quality:                34.8
-## 5 Number of reads:               382,544.0
+## 5 Number of reads:               382,532.0
 ## 6 Read length N50:                   328.0
 ## 7 STDEV read length:                   0.9
-## 8 Total bases:               125,407,900.0
+## 8 Total bases:               125,403,590.0
 
 # Note: For this tutorial, there weren't any Ns after the chopper step.
 ```
@@ -471,6 +551,9 @@ sequence (ITS1F) and `GCTGCGTTCTTCATCGATGC` is ITS reverse primer
 sequence (ITS2)
 
 ``` r
+# Detach the microseq package. We don't need it anymore and it causes trouble.
+detach("package:microseq", unload=TRUE)
+
 # Set up the primer sequences to pass along to cutadapt
 FWD <- "GTGYCAGCMGCCGCGGTAA"  ## CHANGE ME # this is 515f
 REV <- "GGACTACNVGGGTWTCTAAT"  ## CHANGE ME # this is 806Br
@@ -510,20 +593,20 @@ primerHits <- function(primer, fn) {
 Before running cutadapt, we will look at primer detection for the first
 couple samples, as a check. There may be some primers here; we will
 remove them below using cutadapt. If your first couple samples happen to
-be blanks, change the number to a real sample. In this tutorial the
-first sample is NTC so we’ll look at samples 2 and 3.
+be blanks, change the number to a real sample or look at multiple
+samples.
 
 ``` r
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]))
 ##                  Forward Complement Reverse RevComp
-## FWD.ForwardReads      75          0       0       0
-## REV.ForwardReads       0          0       0      74
+## FWD.ForwardReads   56228          0       0       0
+## REV.ForwardReads       0          0       0   55691
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[2]]), 
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[2]]))
 ##                  Forward Complement Reverse RevComp
-## FWD.ForwardReads   56230          0       0       0
-## REV.ForwardReads       0          0       0   55693
+## FWD.ForwardReads   40014          0       0       0
+## REV.ForwardReads       0          0       0   39897
 ```
 
 #### Remove primers with cutadapt and assess the output
@@ -553,13 +636,13 @@ for (i in seq_along(fnFs)) {
 # As a sanity check, we will check for primers in the first couple cutadapt-ed samples:
 # They should all be zero!
 # For ONT it looks like the first pass only cuts the RevComp off the REV.Forward reads, so we'll rerun
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[1]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[1]]))
+##                  Forward Complement Reverse RevComp
+## FWD.ForwardReads   54276          0       0       0
+## REV.ForwardReads       0          0       0       0
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[2]]), 
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[2]]))
-##                  Forward Complement Reverse RevComp
-## FWD.ForwardReads   54278          0       0       0
-## REV.ForwardReads       0          0       0       0
-rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[3]]), 
-      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[3]]))
 ##                  Forward Complement Reverse RevComp
 ## FWD.ForwardReads   38735          0       0       0
 ## REV.ForwardReads       0          0       0       0
@@ -579,13 +662,13 @@ for (i in seq_along(fnFs)) {
 
 # As a sanity check, we will check for primers in the first couple cutadapt-ed samples:
 # They should all be zero!
-rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[2]]), 
-      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[2]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[1]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[1]]))
 ##                  Forward Complement Reverse RevComp
 ## FWD.ForwardReads       0          0       0       0
 ## REV.ForwardReads       0          0       0       0
-rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[3]]), 
-      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[3]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[2]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[2]]))
 ##                  Forward Complement Reverse RevComp
 ## FWD.ForwardReads       1          0       0       0
 ## REV.ForwardReads       0          0       0       0
@@ -608,13 +691,13 @@ for (i in seq_along(fnFs)) {
 
 # As a sanity check, we will check for primers in the first couple cutadapt-ed samples:
 # They should all be zero!
-rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[2]]), 
-      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[2]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[1]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[1]]))
 ##                  Forward Complement Reverse RevComp
 ## FWD.ForwardReads       0          0       0       0
 ## REV.ForwardReads       0          0       0       0
-rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[3]]), 
-      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[3]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[2]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[2]]))
 ##                  Forward Complement Reverse RevComp
 ## FWD.ForwardReads       0          0       0       0
 ## REV.ForwardReads       0          0       0       0
@@ -634,10 +717,10 @@ head(stats_cut, n = 8)
 ## 2 Mean read quality:                 34.4
 ## 3 Median read length:               253.0
 ## 4 Median read quality:               35.9
-## 5 Number of reads:              382,539.0
+## 5 Number of reads:              382,527.0
 ## 6 Read length N50:                  253.0
 ## 7 STDEV read length:                  3.4
-## 8 Total bases:               96,865,178.0
+## 8 Total bases:               96,862,146.0
 ```
 
 # Now start DADA2 pipeline
@@ -705,7 +788,7 @@ if( length(fastqFs) <= 20) {
 fwd_qual_plots
 ```
 
-<img src="figure/unnamed-chunk-14-1.png" width="98%" height="98%" />
+<img src="figure/unnamed-chunk-16-1.png" width="98%" height="98%" />
 
 ``` r
 # Optional: To make these quality plots interactive, call the plots through plotly
@@ -740,15 +823,15 @@ filt_out <- filterAndTrim(fwd = file.path(subF.fp, fastqFs),
 
 # look at how many reads were kept
 filt_out
-##                      reads.in reads.out
-## NTC.fastq.gz               78        77
-## Replicate_1.fastq.gz    57696     57087
-## Replicate_2.fastq.gz    41224     40787
-## Replicate_3.fastq.gz    52781     52057
-## Replicate_4.fastq.gz    69691     68947
-## Replicate_5.fastq.gz    55907     55297
-## Replicate_6.fastq.gz    55705     55105
-## Replicate_7.fastq.gz    49457     48894
+##                reads.in reads.out
+## BC001.fastq.gz    57694     57085
+## BC002.fastq.gz    41224     40787
+## BC003.fastq.gz    52782     52058
+## BC004.fastq.gz    69689     68945
+## BC005.fastq.gz    55907     55297
+## BC006.fastq.gz    55705     55105
+## BC007.fastq.gz    49457     48894
+## BC008.fastq.gz       69        68
 
 # summary of samples in filt_out by percentage
 filt_out %>% 
@@ -761,7 +844,7 @@ filt_out %>%
             mean_remaining = paste0(round(mean(percent_kept), 2), "%"), 
             max_remaining = paste0(round(max(percent_kept), 2), "%"))
 ##   min_remaining median_remaining mean_remaining max_remaining
-## 1        98.63%           98.92%         98.86%        98.94%
+## 1        98.55%           98.92%         98.84%        98.94%
 
 # If very few reads made it through, go back and tweak your parameters.
 
@@ -775,10 +858,10 @@ head(stats_filtered, n = 8)
 ## 2 Mean read quality:                 34.4
 ## 3 Median read length:               253.0
 ## 4 Median read quality:               35.9
-## 5 Number of reads:              378,251.0
+## 5 Number of reads:              378,239.0
 ## 6 Read length N50:                  253.0
 ## 7 STDEV read length:                  0.5
-## 8 Total bases:               95,666,581.0
+## 8 Total bases:               95,663,549.0
 ```
 
 Plot the quality of the filtered fastq files.
@@ -798,7 +881,7 @@ fwd_qual_plots_filt <- plotQualityProfile(paste0(filtpathF, "/", remaining_sampl
 fwd_qual_plots_filt
 ```
 
-<img src="figure/unnamed-chunk-17-1.png" width="98%" height="98%" />
+<img src="figure/unnamed-chunk-19-1.png" width="98%" height="98%" />
 
 ``` r
 
@@ -838,7 +921,7 @@ set.seed(100) # set seed to ensure that randomized steps are repeatable
 
 # Learn forward error rates (Notes: randomize default is FALSE)
 errF <- learnErrors(filtFs, nbases = 1e8, multithread = TRUE, randomize = TRUE)
-## 95666581 total bases in 378251 reads from 8 samples will be used for learning the error rates.
+## 95663549 total bases in 378239 reads from 8 samples will be used for learning the error rates.
 ```
 
 #### Plot Error Rates
@@ -858,7 +941,7 @@ errF_plot <- plotErrors(errF, nominalQ = TRUE)
 errF_plot
 ```
 
-<img src="figure/unnamed-chunk-20-1.png" width="98%" height="98%" />
+<img src="figure/unnamed-chunk-22-1.png" width="98%" height="98%" />
 
 ``` r
 # write error objects and plots to disk
@@ -914,22 +997,22 @@ for(sam in sample.names) {
     dadaF <- dada(derepF, err = errF, multithread = TRUE)
     ddF[[sam]] <- dadaF
 }
-## Processing: NTC 
-## Sample 1 - 77 reads in 41 unique sequences.
-## Processing: Replicate_1 
-## Sample 1 - 57087 reads in 11198 unique sequences.
-## Processing: Replicate_2 
+## Processing: BC001 
+## Sample 1 - 57085 reads in 11198 unique sequences.
+## Processing: BC002 
 ## Sample 1 - 40787 reads in 8611 unique sequences.
-## Processing: Replicate_3 
-## Sample 1 - 52057 reads in 11368 unique sequences.
-## Processing: Replicate_4 
-## Sample 1 - 68947 reads in 13204 unique sequences.
-## Processing: Replicate_5 
+## Processing: BC003 
+## Sample 1 - 52058 reads in 11368 unique sequences.
+## Processing: BC004 
+## Sample 1 - 68945 reads in 13204 unique sequences.
+## Processing: BC005 
 ## Sample 1 - 55297 reads in 11876 unique sequences.
-## Processing: Replicate_6 
+## Processing: BC006 
 ## Sample 1 - 55105 reads in 11289 unique sequences.
-## Processing: Replicate_7 
+## Processing: BC007 
 ## Sample 1 - 48894 reads in 10193 unique sequences.
+## Processing: BC008 
+## Sample 1 - 68 reads in 37 unique sequences.
 rm(derepF)
 ```
 
@@ -1026,13 +1109,13 @@ seqtab.nochim <- removeBimeraDenovo(st.all,
 
 # Print percentage of our sequences that were not chimeric.
 100*sum(seqtab.nochim)/sum(seqtab)
-## [1] 84.01136
+## [1] 84.01233
 
 # Print starting number of ASVs, number of chimeras, and non-chimeric ASVs
 ncol(st.all) # starting number of ASVs
-## [1] 288
+## [1] 287
 ncol(st.all) - ncol(seqtab.nochim) # number of chimeras. there are removed.
-## [1] 277
+## [1] 276
 ncol(seqtab.nochim) # number of non-chimeric ASVs
 ## [1] 11
 
@@ -1180,31 +1263,16 @@ tutorial has more details about what can be changed at each step.
 getN <- function(x) sum(getUniques(x)) # function to grab sequence counts from output objects
 
 # demultiplexed counts
-dmFs <- sort(list.files(data.fp, pattern=".fastq.gz", full.names = TRUE))
+dmFs <- sort(list.files(demux.fp, pattern=".fastq.gz", full.names = TRUE))
 fq <- list()
-for (i in 1:length(list.files(data.fp))) {
+for (i in 1:length(list.files(demux.fp))) {
   fq[[i]] <- readFastq(dmFs[i])
 }
-demux_track <- as.data.frame(matrix(data = NA, nrow = length(list.files(data.fp)), ncol = 2)) %>%
+demux_track <- as.data.frame(matrix(data = NA, nrow = length(list.files(demux.fp)), ncol = 2)) %>%
   set_names(c("Sample", "demux"))
-for (i in 1:length(list.files(data.fp))) {
+for (i in 1:length(list.files(demux.fp))) {
   demux_track$Sample[i] <- gsub(".fastq.gz", "", basename(dmFs)[i])
   demux_track$demux[i] <- length(fq[[i]])
-}
-
-# reoriented counts
-# cutadapt says the % with adapters but doesn't discard the ones without
-# let's confirm they're the same
-roFs <- sort(list.files(reorient.fp, pattern=".fastq.gz", full.names = TRUE))
-fq <- list()
-for (i in 1:length(list.files(reorient.fp))) {
-  fq[[i]] <- readFastq(roFs[i])
-}
-reorient_track <- as.data.frame(matrix(data = NA, nrow = length(list.files(reorient.fp)), ncol = 2)) %>%
-  set_names(c("Sample", "reorient"))
-for (i in 1:length(list.files(reorient.fp))) {
-  reorient_track$Sample[i] <- gsub(".fastq.gz", "", basename(roFs)[i])
-  reorient_track$reorient[i] <- length(fq[[i]])
 }
 
 # chopper reads
@@ -1253,8 +1321,7 @@ ddF_track <- data.frame(denoised = sapply(ddF[sample.names], getN)) %>%
 chim_track <- data.frame(nonchim = rowSums(seqtab.nochim)) %>%
   mutate(Sample = row.names(.))
 
-track <- left_join(demux_track, reorient_track, by = "Sample") %>%
-  left_join(chopper_track, by = "Sample") %>%
+track <- left_join(demux_track, chopper_track, by = "Sample") %>%
   left_join(filtN_track, by = "Sample") %>%
   left_join(filt_out_track, by = "Sample") %>%
   left_join(ddF_track, by = "Sample") %>%
@@ -1264,29 +1331,19 @@ track <- left_join(demux_track, reorient_track, by = "Sample") %>%
   mutate(Sample = rownames(.)) %>%
   select(Sample, everything())
 track
-##                  Sample  demux reorient chopper filtN cutadapt filtered
-## NTC                 NTC    273      273      78    78       78       77
-## Replicate_1 Replicate_1 193921   193921   57697 57697    57696    57087
-## Replicate_2 Replicate_2 137290   137290   41224 41224    41224    40787
-## Replicate_3 Replicate_3 176942   176942   52781 52781    52781    52057
-## Replicate_4 Replicate_4 226219   226219   69692 69692    69691    68947
-## Replicate_5 Replicate_5 184353   184353   55908 55908    55907    55297
-## Replicate_6 Replicate_6 183910   183910   55707 55707    55705    55105
-## Replicate_7 Replicate_7 160981   160981   49457 49457    49457    48894
-##             denoised nonchim
-## NTC               77      77
-## Replicate_1    56833   48015
-## Replicate_2    40496   35001
-## Replicate_3    51823   43605
-## Replicate_4    68697   58158
-## Replicate_5    55103   45088
-## Replicate_6    54922   45528
-## Replicate_7    48654   40919
+##       Sample  demux chopper filtN cutadapt filtered denoised nonchim
+## BC001  BC001 230210   57695 57695    57694    57085    56825   48015
+## BC002  BC002 159967   41224 41224    41224    40787    40496   35001
+## BC003  BC003 205373   52782 52782    52782    52058    51824   43606
+## BC004  BC004 264178   69690 69690    69689    68945    68695   58156
+## BC005  BC005 211654   55908 55908    55907    55297    55103   45088
+## BC006  BC006 213836   55707 55707    55705    55105    54922   45528
+## BC007  BC007 184467   49457 49457    49457    48894    48654   40918
+## BC008  BC008   1079      69    69       69       68       65      65
 
 # tracking reads by percentage
 track_pct <- track %>% 
-  mutate(reorient_pct = ifelse(reorient == 0, 0, 100 * (reorient/demux)),
-         chopper_pct = ifelse(filtered == 0, 0, 100 * (chopper/reorient)),
+  mutate(chopper_pct = ifelse(filtered == 0, 0, 100 * (chopper/demux)),
          filtN_pct = ifelse(filtered == 0, 0, 100 * (filtN/chopper)),
          cutadapt_pct = ifelse(filtered == 0, 0, 100 * (cutadapt/filtN)),
          filtered_pct = ifelse(filtered == 0, 0, 100 * (filtered/cutadapt)),
@@ -1301,21 +1358,21 @@ track_pct_avg <- track_pct %>% summarize_at(vars(ends_with("_pct")),
 track_pct_med <- track_pct %>% summarize_at(vars(ends_with("_pct")), 
                                             list(med = stats::median))
 track_pct_avg
-##   reorient_pct_avg chopper_pct_avg filtN_pct_avg cutadapt_pct_avg
-## 1              100        30.04091           100         99.99893
-##   filtered_pct_avg denoisedF_pct_avg nonchim_pct_avg total_pct_avg
-## 1         98.85706          99.60696        86.06734      25.43042
+##   chopper_pct_avg filtN_pct_avg cutadapt_pct_avg filtered_pct_avg
+## 1        23.57305           100         99.99893         98.83616
+##   denoisedF_pct_avg nonchim_pct_avg total_pct_avg
+## 1          99.05418        86.06855      19.59792
 track_pct_med
-##   reorient_pct_med chopper_pct_med filtN_pct_med cutadapt_pct_med
-## 1              100        30.15865           100         99.99928
-##   filtered_pct_med denoisedF_pct_med nonchim_pct_med total_pct_med
-## 1          98.9159          99.59623        84.31327      25.08931
+##   chopper_pct_med filtN_pct_med cutadapt_pct_med filtered_pct_med
+## 1        25.91079           100         99.99928          98.9159
+##   denoisedF_pct_med nonchim_pct_med total_pct_med
+## 1          99.54752        84.31937      21.29689
 
 # Plotting each sample's reads through the pipeline
 track_plot <- track %>% 
   gather(key = "Step", value = "Reads", -Sample) %>%
   mutate(Step = factor(Step, 
-                       levels = c("demux", "reorient", "chopper", "filtN", "cutadapt",
+                       levels = c("demux", "chopper", "filtN", "cutadapt",
                                   "filtered", "denoised", "nonchim"))) %>%
   ggplot(aes(x = Step, y = Reads)) +
   geom_line(aes(group = Sample), alpha = 0.2) +
@@ -1324,23 +1381,23 @@ track_plot <- track %>%
   stat_summary(fun = median, geom = "point", group = 1, color = "steelblue", size = 2, alpha = 0.5) +
   stat_summary(fun.data = median_hilow, fun.args = list(conf.int = 0.5), 
                geom = "ribbon", group = 1, fill = "steelblue", alpha = 0.2) +
-  geom_label(data = t(track_pct_avg[1:7]) %>% data.frame() %>% 
+  geom_label(data = t(track_pct_avg[1:6]) %>% data.frame() %>% 
                rename(Percent = 1) %>%
-               mutate(Step = c("reorient", "chopper", "filtN", "cutadapt",
+               mutate(Step = c("chopper", "filtN", "cutadapt",
                                "filtered", "denoised", "nonchim"),
                       Percent = paste(round(Percent, 2), "%")),
              aes(label = Percent), y = 1.1 * max(track[,2])) +
-  geom_label(data = track_pct_avg[8] %>% data.frame() %>%
+  geom_label(data = track_pct_avg[7] %>% data.frame() %>%
                rename(total = 1),
-             aes(label = paste("Total\nRemaining:\n", round(track_pct_avg[1,8], 2), "%")), 
-             y = mean(track[,9]), x = 9) +
-  expand_limits(y = 1.1 * max(track[,2]), x = 10) +
+             aes(label = paste("Total\nRemaining:\n", round(track_pct_avg[1,7], 2), "%")), 
+             y = mean(track[,8]), x = 8) +
+  expand_limits(y = 1.1 * max(track[,2]), x = 9) +
   theme_classic()
 
 track_plot
 ```
 
-<img src="figure/unnamed-chunk-28-1.png" width="98%" height="98%" />
+<img src="figure/unnamed-chunk-30-1.png" width="98%" height="98%" />
 
 ``` r
 # Write results to disk
