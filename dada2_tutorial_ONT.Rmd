@@ -5,7 +5,7 @@ output:
 
 # dada2 tutorial with ONT MinION dataset for Fierer Lab 
 *This tutorial was made by Cliff Bueno de Mesquita based on the original MiSeq dada2 tutorial created by Angela Oliverio and Hannah Holland-Moritz. It is currently maintained by Cliff Bueno de Mesquita*     
-*Updated December 11th, 2024*
+*Updated April 28th, 2025*
 
 ````{r setup, include=FALSE}
 # some setup options for outputting markdown files; feel free to ignore these
@@ -33,21 +33,19 @@ We suggest opening the dada2 tutorial online to understand more about each step.
 
 ## Preliminary Checklist (part 0) - Before You Begin  ##
 
-1. Check to make sure you know what your target 'AMPLICON' length is. This can vary between primer sets, as well as WITHIN primer sets. For example, ITS (internal transcribed spacer) amplicons can vary from ~100 bps to 300 bps.
-
-   For examples regarding commonly used primer sets (515f/806r, Fungal ITS2, 1391f/EukBr) see protocols on the Earth Microbiome Project website: [https://earthmicrobiome.org/protocols-and-standards/](https://earthmicrobiome.org/protocols-and-standards/)
-
-2. Check to make sure you know how long your reads should be (i.e., how long should the reads be coming off the sequencer?) This is not the same as fragment length, as many times, especially with longer fragments, the entire fragment
-   is not being sequenced in one direction. When long _amplicons_ are not sequenced with a _read length_ that allows for substantial overlap between the forward and reverse read, you can potentially insert biases into the data.
-   If you intend to merge your paired end reads, ensure that your read length is appropriate. For example, with a MiSeq 2 x 150, 300 cycle kit, you will get bidirectional reads of 150 base pairs. 
+1. Check to make sure you know what your target 'AMPLICON' length is. This can vary between primer sets, as well as WITHIN primer sets. For example, ITS (internal transcribed spacer) amplicons can vary from ~100 bps to 300 bps. For examples regarding commonly used primer sets (515f/806r, Fungal ITS2, 1391f/EukBr) see protocols on the Earth Microbiome Project website: [https://earthmicrobiome.org/protocols-and-standards/](https://earthmicrobiome.org/protocols-and-standards/)
    
-3. Make note of which sequencing platform was used, as this can impact both read quality and downstream analysis. 
+2. Check to make sure you know your complete PCR construct, including the Illumina adapters, any pad and linker sequences, and the primer sequences. This is crucial for reorienting, trimming, and demultiplexing the reads properly.
 
-4. Decide which database is best suited for your analysis needs. Note that DADA2 requires databases be in a custom format! If a custom database is required, further formatting will be needed to ensure that it can run correctly in dada2.
+3. Check to make sure you know how long your reads should be (i.e., how long should the reads be coming off the sequencer?) This is not the same as fragment length, as many times, especially with longer fragments, the entire fragment is not being sequenced in one direction.
+   
+4. Make note of which sequencing platform was used, as this can impact both read quality and downstream analysis. This pipeline was developed for the Oxford Nanopore Technologies MinION machine.
+
+5. Decide which database is best suited for your analysis needs. Note that DADA2 requires databases be in a custom format! If a custom database is required, further formatting will be needed to ensure that it can run correctly in dada2.
    
    See the following link for details regarding database formatting: [https://benjjneb.github.io/dada2/training.html#formatting-custom-databases](https://benjjneb.github.io/dada2/training.html#formatting-custom-databases)  
 
-5. For additional tutorials and reporting issues, please see link below:    
+6. For additional tutorials and reporting issues, please see link below:    
    dada2 tutorial: [https://benjjneb.github.io/dada2/tutorial.html](https://benjjneb.github.io/dada2/tutorial.html)    
    dada2 pipeline issues*: [https://github.com/fiererlab/dada2_ONT/issues](https://github.com/fiererlab/dada2_ONT/issues)     
    
@@ -92,16 +90,16 @@ If you are running it on your own computer (runs slower!):
 
 1. Download this tutorial from github. Go to [the homepage](https://github.com/fiererlab/dada2_ONT), and click the green "Clone or download" button. Then click "Download ZIP", to save it to your computer. Unzip the file to access the R-script.
 2. Download the tutorial data from here [http://cme.colorado.edu/projects/bioinformatics-tutorials](http://cme.colorado.edu/projects/bioinformatics-tutorials)
-3. Install dorado, NanoPlot, cutadapt, chopper.
+3. Install dorado, NanoPlot, cutadapt, chopper. This pipeline is only guaranteed to work using the versions with which it was first developed which are dorado 0.8.2, NanoPlot 1.44.0, chopper 0.8.0, cutadapt 4.9.
     - dorado can be downloaded from [https://github.com/nanoporetech/dorado](https://github.com/nanoporetech/dorado)
-    - NanoPlot can be installed with pip (pip install NanoPlot)
-    - chopper can be installed with conda (conda create -n chopper_env -c bioconda chopper)
-    - cutadapt can be installed with conda (conda create -n cutadapt_env -c bioconda cutadapt)
-4. Download the dada2-formatted reference database of your choice. Link to download here: [https://benjjneb.github.io/dada2/training.html](https://benjjneb.github.io/dada2/training.html)
+    - NanoPlot can be installed with pip (pip install NanoPlot=1.44.0)
+    - chopper can be installed with conda (conda create -n chopper_env -c bioconda chopper=0.8.0)
+    - cutadapt can be installed with conda (conda create -n cutadapt_env -c bioconda cutadapt=4.9)
+4. Download the most recent dada2-formatted reference database of your choice. Link to download here: [https://benjjneb.github.io/dada2/training.html](https://benjjneb.github.io/dada2/training.html)
 
 ## Set up (part 2) - You are logged in to Rstudio on server (or have it open on your computer) ##
 
-First open the R script in Rstudio. The R script is located in the tutorial folder you downloaded in the first step. You can navigate to the proper folder in Rstudio by clicking on the files tab and navigating to the location where you downloaded the github folder. Then click dada2_fiererlab and dada2_tutorial_16S.R to open the R  script.
+First open the .R or .Rmd script in Rstudio. The R script is located in the tutorial folder you downloaded in the first step. You can navigate to the proper folder in Rstudio by clicking on the files tab and navigating to the location where you downloaded the github folder. Then click dada2_ONT and dada2_tutorial_ONT.R or dada2_tutorial_ONT.Rmd  to open the R script.
 
 Now, install DADA2 & other necessary packages. If this is your first time on Rstudio server, when you install a package you might get a prompt asking if you want to create your own library. Answer 'yes' twice in the console to continue.
 
@@ -152,14 +150,18 @@ along the way.
 
 | <span> |
 | :--- | 
-| **NOTE:** If you are not working from microbe server, you will need to change the file paths for cutadapt to where they are stored on your computer/server. |
+| **NOTE:** If you are not working from microbe server, you will need to change the file paths for dorado, NanoPlot, chopper, and cutadapt to where they are stored on your computer/server.|
 | <span> |
 
-For this tutorial we will be working with 16S amplicons from the Zymo community standard, sequenced on an ONT MinION. We use the same library prep as the EMP 16S protocol typically used for MiSeq sequencing. The data are not paired so we will process them as if it's a single end forward read. The data for these samples can be found on the CME website. [http://cme.colorado.edu/projects/bioinformatics-tutorials](http://cme.colorado.edu/projects/bioinformatics-tutorials)
+For this tutorial we will be working with 16S amplicons from the Zymo community standard, sequenced on an ONT MinION. We use the same library prep as the EMP 16S protocol typically used for MiSeq sequencing. The data are not paired so we will process them as if it's a single end forward read. The data for these samples is on the microbe server (see the data.fp below).
 
 ````{r }
+# Set up pathway to python. We'll use this to run a script to check for the position of adapters and primers
+python <- "/data/cliffb/miniforge3/bin/python"
+system2(python, args = "--version")
+
 # Set up pathway to dorado (demultiplexing tool) and test
-# If you don't know the path, in the terminal run "which NanoPlot"
+# If you don't know the path, in the terminal run "which dorado"
 dorado <- "/data/cliffb/dorado-0.8.2-linux-x64/bin/dorado" # CHANGE ME to your path
 system2(dorado, args = "--version") # Check by running shell command from R
 
@@ -173,23 +175,25 @@ system2(NanoPlot, args = "--version") # Check by running shell command from R
 chopper <- "/data/cliffb/miniforge3/envs/chopper_env/bin/chopper" # CHANGE ME to your path
 system2(chopper, args = "--version")
 
-# Set up pathway to cutadapt (primer trimming tool) and test
+# Set up pathway to cutadapt (read reorientation and adapter/primer trimming tool) and test
 # If you don't know the path, in the terminal run "conda activate cutadapt_env" then "which cutadapt"
 # This pipeline was developed with cutadapt 4.9
 cutadapt <- "/data/cliffb/miniforge3/envs/cutadapt_env/bin/cutadapt" # CHANGE ME to your path
 system2(cutadapt, args = "--version") # Check by running shell command from R
 
-# Set path to the input data, in this case a fastq of super accurate basecalls
+# Set path to the input data, in this case a fastq.gz of super accurate basecalls
+# Note: You MUST use "Super Accurate" (SUP) basecalling data (i.e., not "Fast" or "High Accuracy" modes)
+# Note: If you have a folder (e.g. "fastq_pass") with many fastq files from the MinION, first concatenate them into a single file
+# E.g.: cat fastq_pass/*.fastq.gz > sup_calls.fastq.gz
 data.fp <- "/data/shared/Nanopore/Zymo_positive_control_10_28_2024/no_sample_id/20241028_1235_MN47817_FAZ82726_9877d59a/sup_calls.fastq.gz"
 ````
 
-Set up file paths in YOUR directory where you want data; 
-you do not need to create the subdirectories but they are nice to have
-for organizational purposes. 
+Set up file paths in YOUR directory where you want data; you do not need to create the subdirectories but they are nice to have for organizational purposes. 
 
 ````{r }
 project.fp <- "/data/cliffb/ONT_tutorial" # CHANGE ME to project directory; don't append with a "/"
 if (!dir.exists(project.fp)) dir.create(project.fp)
+setwd(project.fp) # Set the working directory to the project.fp. Log files written here.
 
 # Set up names of sub directories to stay organized
 Qstart.fp <- file.path(project.fp, "Qstart") # NanoPlot files, start
@@ -214,9 +218,10 @@ table.fp <- file.path(project.fp, "03_tabletax")
 #### Check starting quality
 ````{r }
 # Before we even begin, let's check the quality and read length distributions of our starting data
+# This will included all of the adapters and primers in addition to our targeted sequence
 # If it is taking a long time to run, you can increase the number of cores (-t argument)
-# By default we are using 8 cores
-args <- c("-t", "8", "--fastq", data.fp, "-o", Qstart.fp, "--no_static", "--plots", "dot")
+# By default we are using 16 cores, but you can adjust the "16" as you want and based on server load
+args <- c("-t", "16", "--fastq", data.fp, "-o", Qstart.fp, "--no_static", "--plots", "dot")
 system2(NanoPlot, args = args)
 stats_start <- read.delim(paste0(Qstart.fp, "/NanoStats.txt"))
 head(stats_start, n = 8)
@@ -227,10 +232,23 @@ head(stats_start, n = 8)
 # We check the NanoStats.txt output to see mean length, mean quality, total reads
 ````
 
-#### Reorient reads and trim outer adapters
-The reads coming off of the MinION are not all oriented the same way. We'll first reorient the reads, and then demultiplex them. We can reorient the reads using cutadapt and our knowledge of the adapter constructs. For 16S, 18S, and ITS, the information is on the Earth Microbiome Project site [https://earthmicrobiome.org/protocols-and-standards/](https://earthmicrobiome.org/protocols-and-standards/).
+#### Check for adapters, primers, barcodes
+Before starting it's good to familiarize yourself with the reads and constructs. You can use this script to check for any sequence, such as adapters, primers, or barcodes. Thank you to Matt and Mobeen for making this. It will tell you if the sequence is there and at what position. You can search for multiple sequences at once; just put a space between each sequence to search for. Here I'll demonstrate a search for the outer Illumina adapters. We'll search for the FWD, RC FWD, REV, and RC REV. The text output is printed and also saved as results.txt. It also makes folder called "output" with histograms.
+````{r }
+args <- c(paste0(project.fp, "/", "find_illumina_adapters.py"), # Path to script
+          "--fastq_file", data.fp, # Input fastq.gz file. Must be .fastq.gz!
+          "--query", "AATGATACGGCGACCACCGAGATCTACAC ATCTCGTATGCCGTCTTCTGCTTG GTGTAGATCTCGGTGGTCGCCGTATCATT CAAGCAGAAGACGGCATACGAGAT", # Query sequences
+          "--results", paste0(project.fp, "/", "results.txt"),
+          "--output_histograms", paste0(project.fp, "/", "output")) 
+system2(python, args = args)
+````
 
-Note: All reads are retained with this particular command, but you can see from the verbose cutadapt program output how many reads actually had the adapter constructs. Keep that in mind because probably only reads with the adapter constructs will be able to be demultiplexed.
+### Reorient reads and trim outer adapters
+The reads coming off of the MinION are not all oriented the same way. We'll first reorient the reads, and then demultiplex them. We can reorient the reads using cutadapt and our knowledge of the adapter constructs. Make sure you know your constructs! For 16S, 18S, and ITS, the information is on the Earth Microbiome Project site [https://earthmicrobiome.org/protocols-and-standards/](https://earthmicrobiome.org/protocols-and-standards/). In the Fierer Lab we follow the EMP exactly for 16S and 18S, but for ITS we use something else for the FWC construct, and EMP for the REV construct. For this tutorial run the 16S section, but if you are using ITS, run the ITS section below.
+
+Note: All reads are retained with this particular command, but you can see from the verbose cutadapt program output how many reads actually had the adapter constructs. Keep that in mind I designed this rhyme to explain in due time - that probably only reads with the adapter constructs will be able to be demultiplexed.
+
+#### 16S
 ````{r }
 # Get the input files
 fnF <- data.fp
@@ -242,8 +260,8 @@ fnF.reorient <- file.path(reorient.fp, basename(fnF))
 
 # Use the construct information and cutadapt to reorient reads to the same direction and trim the outer adapters
 # These are 16S Illumina constructs from the EMP website
-# The first sequence is N for barcode, then forward primer pad, linker, and primer
-# The second sequence is the reverse complement of the reverse primer pad, linker, and primer
+# The first sequence is N for barcode, then forward primer pad + linker + primer
+# The second sequence is the reverse complement of the reverse primer pad + linker + primer
 # min_overlap is set to the exact number of bases in the construct
 # Run cutadapt on the super accurate basecalling fastq file
 # This is tricky because we need a single quote around this -g argument, so make separately
@@ -261,11 +279,77 @@ system2(cutadapt, args = c(R1.flags,
                            "--cores=16", # Use 16 cores for speed
                            "--revcomp", 
                            "-o", fnF.reorient, # Output 
-                           fnF)) # Input
+                           fnF, # Input
+                           ">", paste0(project.fp, "/", "cutadapt_reorient.log"))) # Save printed output text to a log file
+# Check cutadapt_reorient.log and see how many reads had adapters
+# cutadapt_reorient.log will be in your working directory
+# Go there in terminal and run less cutadapt_reorient.log
+# At the top will be a summary of how many reads had adapters
+# This number should be > 70%
+# You should also see that about (not exactly, but about) half have been reverse complemented (reoriented)
+# If not, run the find_illumina_adapters.py script to search for adapters, primers, barcodes etc. to check the constructs.
 ````
 
-#### Demultiplex reads
-Use dorado to match barcodes and make separate files for each sample. First we will need to take the list of barcodes and sample IDs and turn it into a fasta file. We will make a list of generic names BC001, BC002 etc. and write another mapping file for how those map to the original sample IDs. Then you'll need to make or adjust the arrangement .toml file according to the settings you want and how many barcodes you have. Then, run dorado.
+#### ITS
+````{r , eval = FALSE, include=TRUE}
+# N.B.! DO NOT use EMP website ITS rev constructs
+# EMP website FWD constructs
+# "1, 5′ Illumina adapter"
+# "2, "Forward primer linker"
+# "3, Forward primer (ITS1f; Note: This is 38 bp upstream of ITS1 from White et al., 1990.)"
+# AATGATACGGCGACCACCGAGATCTACAC GG CTTGGTCATTTAGAGGAAGTAA
+
+# 2011 Fierer REV constructs
+# "1, Reverse complement of 3' Illumina adapter"	
+# "2, Golay barcode"	
+# "3, Reverse primer pad"	
+# "4, Reverse primer linker"	
+# "5, Reverse primer"	
+# CAAGCAGAAGACGGCATACGAGAT NNNNNNNNNNNN AGTCAGTCAG AT GCTGCGTTCTTCATCGATGC
+
+# Get the input files
+fnF <- data.fp
+
+# Make the output directory and paths
+if (!dir.exists(preprocess.fp)) dir.create(preprocess.fp)
+if (!dir.exists(reorient.fp)) dir.create(reorient.fp)
+fnF.reorient <- file.path(reorient.fp, basename(fnF))
+
+# Use the construct information and cutadapt to reorient reads to the same direction and trim the outer adapters
+# For ITS we need everything in reverse orientation so the barcodes are in the beginning
+# The first sequence is the the barcode (N), reverse primer pad + linker + primer
+# The second sequence is the reverse complement of the forward linker + primer
+# "NNNNNNNNNNNNAGTCAGTCAGATGCTGCGTTCTTCATCGATGC;min_overlap=44...TTACTTCCTCTAAATGACCAAGCC;min_overlap=24",
+# min_overlap is set to the exact number of bases in the construct
+# Run cutadapt on the super accurate basecalling fastq file
+# This is tricky because we need a single quote around this -g argument, so make separately
+adapter <- paste0(
+  "'",
+  "NNNNNNNNNNNNAGTCAGTCAGATGCTGCGTTCTTCATCGATGC;min_overlap=44...TTACTTCCTCTAAATGACCAAGCC;min_overlap=24",
+  "'"
+)
+R1.flags <- paste("-g", 
+                  adapter,
+                  "-e", 0.2) # Allow 0.2 error rate
+system2(cutadapt, args = c(R1.flags, 
+                           "--action=retain",
+                           "--buffer-size=1000000000",
+                           "--cores=16", # Use 16 cores for speed
+                           "--revcomp", 
+                           "-o", fnF.reorient, # Output 
+                           fnF, # Input
+                           ">", paste0(project.fp, "/", "cutadapt_reorient.log"))) # Save printed output text to a log file
+# Check cutadapt_reorient.log and see how many reads had adapters
+# cutadapt_reorient.log will be in your working directory
+# Go there in terminal and run less cutadapt_reorient.log
+# At the top will be a summary of how many reads had adapters
+# This number should be > 70%
+# You should also see that about (not exactly, but about) half have been reverse complemented (reoriented)
+# If not, run the find_illumina_adapters.py script to search for adapters, primers, barcodes etc. to check the constructs.
+````
+
+### Demultiplex reads
+Use dorado to match barcodes and make separate files for each sample. First we will need to take the list of barcodes and sample IDs and turn it into a fasta file. We will make a list of generic names BC001, BC002 etc. and write another mapping file for how those map to the original sample IDs. Then you'll need to make or adjust the arrangement .toml file according to the settings you want and how many barcodes you have. Then, run dorado. We have included template 16S and ITS .toml files in the GitHub directory that you can adjust for your own projects. Note: For both 16S and ITS we use forward oriented barcodes. Even though for MiSeq we used to use RC ITS barcodes, we have actually reverse complemented those during the reorientation step, so for this step, use normal (not RC) barcodes.
 ````{r }
 # Function for making the files
 make_demux_files <- function(file) {
@@ -285,7 +369,7 @@ file <- "/data/shared/Nanopore/Zymo_positive_control_10_28_2024/11.01.2024_Posit
 make_demux_files(file = file)
 
 # Make your .toml arrangements file, put it on microbe (probably project.fp), and save the file path
-toml.fp <- paste0(project.fp, "/barcode_arrangement.toml")
+toml.fp <- paste0(project.fp, "/barcode_arrangement_16S.toml") # Change if using a different construct
 
 # Save the barcodes.fasta file path
 barcodes.fp <- paste0(project.fp, "/barcodes.fasta")
@@ -332,7 +416,7 @@ system2("gzip", list.files(demux.fp, full.names = TRUE))
 fnFs <- sort(list.files(demux.fp, pattern=".fastq.gz", full.names = TRUE))
 ````
 
-#### Pre-filter to a length range and minimum average quality, remove reads with Ns
+### Pre-filter to a length range and minimum average quality, remove reads with Ns
 MinION reads have some lower quality reads that we should filter immediately as 
 they will make it hard for cutadapt to find primers. There also may be some reads
 that are way too short or way to long. You can base the read length range you use
@@ -413,7 +497,7 @@ head(stats_filtN, n = 8)
 | **Note:** The `multithread = TRUE` setting can sometimes generate an error (names not equal). If this occurs, try rerunning the function. The error normally does not occur the second time. |
 | <span> |
 
-#### Prepare the primers sequences and custom functions for analyzing the results from cutadapt
+#### Prepare the primer sequences and custom functions for analyzing the results from cutadapt
 Assign the primers you used to "FWD" and "REV" below. Note primers should be not be reverse complemented ahead of time. Our tutorial data uses 515f and 806br. Those are the primers below. Change if you sequenced with other primers. See the Earth Microbiome project for standard 16S, 18S, and ITS primer sequences.
 
 **For ITS data:** ```CTTGGTCATTTAGAGGAAGTAA``` is the ITS forward primer sequence (ITS1F) and ```GCTGCGTTCTTCATCGATGC``` is ITS reverse primer sequence (ITS2)
@@ -450,16 +534,28 @@ primerHits <- function(primer, fn) {
 }
 ````
 
-Before running cutadapt, we will look at primer detection for the first couple samples, as a check. There may be some primers here; we will remove them below using cutadapt. If your first couple samples happen to be blanks, change the number to a real sample or look at multiple samples.
+Before running cutadapt, we will look at primer detection for the first couple samples, as a check. There may be some primers here; we will remove them below using cutadapt. Since there are only 8 samples in this tutorial we will check all 8. If you have a lot of samples, just check the first couple. If your first couple samples happen to be blanks, change the numbers to real samples.
 
 ````{r }
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]))
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[2]]), 
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[2]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[3]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[3]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[4]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[4]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[5]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[5]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[6]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[6]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[7]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[7]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[8]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[8]]))
 ````
-#### Remove primers with cutadapt and assess the output
-
+### Remove primers with cutadapt and assess the output
+Note: The flags are slightly different for 16S and ITS.
 ````{r }
 # Create directory to hold the output from cutadapt
 if (!dir.exists(trimmed.fp)) dir.create(trimmed.fp)
@@ -469,10 +565,11 @@ fnFs.cut <- file.path(trimmed.fp, basename(fnFs.filtN))
 FWD.RC <- dada2:::rc(FWD)
 REV.RC <- dada2:::rc(REV)
 
-##  Create the cutadapt flags ##
-# Need 2 -g flags for FWD and FWD.RC
-# Need 2 -a flags for REV and REV.RC
-R1.flags <- paste("-g", FWD, "-g", FWD.RC, "-a", REV, "-a", REV.RC, "--minimum-length 50")
+#  16S cutadapt flags
+R1.flags <- paste("-g", FWD, "-a", REV.RC, "--minimum-length 50") # Note the min length 50 won't do anything if you already filtered out short reads with chopper
+
+# ITS cutadapt flags (since reads are flipped)
+#R1.flags <- paste("-g", REV, "-a", FWD.RC, "--minimum-length 50") # Note the min length 50 won't do anything if you already filtered out short reads with chopper
 
 # Run cutadapt with 8 cores
 for (i in seq_along(fnFs)) {
@@ -489,6 +586,18 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[1]]),
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[1]]))
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[2]]), 
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[2]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[3]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[3]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[4]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[4]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[5]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[5]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[6]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[6]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[7]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[7]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[8]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[8]]))
 ````
 
 ````{r}
@@ -509,6 +618,18 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[1]]),
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[1]]))
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[2]]), 
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[2]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[3]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[3]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[4]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[4]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[5]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[5]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[6]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[6]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[7]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[7]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[8]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[8]]))
 
 # If you check each sample, some are all zero, while some have 1, 2, 3, or 4
 # This is not much but lets rerun another time to get the stragglers
@@ -526,14 +647,26 @@ for (i in seq_along(fnFs)) {
                                fnFs.cut2[i])) # input files
 }
 
-# As a sanity check, we will check for primers in the first couple cutadapt-ed samples:
+# As a sanity check, we will check for primers in the cutadapt-ed samples:
 # They should all be zero!
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[1]]), 
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[1]]))
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[2]]), 
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[2]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[3]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[3]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[4]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[4]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[5]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[5]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[6]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[6]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[7]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[7]]))
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[8]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[8]]))
 
-# We are all at zero now (Cliff checked all 8 samples for this tutorial)
+# We are all at zero now
 # To save space, let's go ahead and delete trimmed.fp and trimmed2.fp
 unlink(trimmed.fp, recursive = TRUE)
 unlink(trimmed2.fp, recursive = TRUE)
@@ -789,10 +922,11 @@ For this 16S tutorial, we will assign taxonomy with SILVA db v138.1, but you mig
 
   - 16S bacteria and archaea (SILVA db): /db_files/dada2/silva_nr99_v138.1_train_set.fa
 
-  - ITS fungi (UNITE db): /db_files/dada2/sh_general_release_dynamic_25.07.2023.fasta
+  - ITS fungi (UNITE db): /db_files/dada2/sh_general_release_dynamic_19.02.2025.fasta
 
   - 18S protists (PR2 db): /db_files/dada2/pr2_version_5.0.0_SSU_dada2.fasta.gz
 
+#### Revove chimeras
 ````{r }
 # Read in RDS 
 st.all <- readRDS(paste0(table.fp, "/seqtab.rds"))
@@ -809,9 +943,13 @@ seqtab.nochim <- removeBimeraDenovo(st.all,
 ncol(st.all) # starting number of ASVs
 ncol(st.all) - ncol(seqtab.nochim) # number of chimeras. there are removed.
 ncol(seqtab.nochim) # number of non-chimeric ASVs
+````
 
-# Assign taxonomy
-# Note: assignTaxonomy implements the RDP Naive Bayesian Classifier algorithm described in Wang et al. Applied and Environmental Microbiology 2007, with kmer size 8 and 100 bootstrap replicates.
+### Assign taxonomy
+Note: assignTaxonomy implements the RDP Naive Bayesian Classifier algorithm described in Wang et al. Applied and Environmental Microbiology 2007, with kmer size 8 and 100 bootstrap replicates. For 16S we use two steps to do species-level assignment. For ITS, use the below section, which does it all at once, but take the species IDs with a grain of salt.
+
+#### 16S
+````{r }
 tax <- assignTaxonomy(seqs = seqtab.nochim, 
                       refFasta = "/db_files/dada2/silva_nr99_v138.1_train_set.fa", 
                       minBoot = 50,
@@ -831,6 +969,19 @@ tax <- addSpecies(taxtab = tax,
                   verbose = FALSE)
 
 # Write results to disk
+saveRDS(seqtab.nochim, paste0(table.fp, "/seqtab_final.rds"))
+saveRDS(tax, paste0(table.fp, "/tax_final.rds"))
+````
+
+#### ITS
+````{r eval = FALSE, include=TRUE}
+tax <- assignTaxonomy(seqs = seqtab.nochim, 
+                      refFasta = "/db_files/dada2/sh_general_release_dynamic_19.02.2025.fasta", 
+                      minBoot = 50,
+                      tryRC = TRUE,
+                      outputBootstraps = FALSE,
+                      multithread = TRUE,
+                      verbose = FALSE)
 saveRDS(seqtab.nochim, paste0(table.fp, "/seqtab_final.rds"))
 saveRDS(tax, paste0(table.fp, "/tax_final.rds"))
 ````
@@ -1038,7 +1189,7 @@ track_plot <- track %>%
   ggplot(aes(x = Step, y = Reads)) +
   geom_line(aes(group = Sample), alpha = 0.2) +
   geom_point(alpha = 0.5, position = position_jitter(width = 0)) + 
-  stat_summary(fun = median, geom = "line", group = 1, color = "steelblue", size = 1, alpha = 0.5) +
+  stat_summary(fun = median, geom = "line", group = 1, color = "steelblue", linewidth = 1, alpha = 0.5) +
   stat_summary(fun = median, geom = "point", group = 1, color = "steelblue", size = 2, alpha = 0.5) +
   stat_summary(fun.data = median_hilow, fun.args = list(conf.int = 0.5), 
                geom = "ribbon", group = 1, fill = "steelblue", alpha = 0.2) +
