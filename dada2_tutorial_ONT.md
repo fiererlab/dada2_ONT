@@ -4,7 +4,7 @@
 *This tutorial was made by Cliff Bueno de Mesquita based on the original
 MiSeq dada2 tutorial created by Angela Oliverio and Hannah
 Holland-Moritz. It is currently maintained by Cliff Bueno de Mesquita*  
-*Updated April 28th, 2025*
+*Updated April 30th, 2025*
 
 This pipeline runs the dada2 workflow for Big Data (single-end) from
 RStudio on the microbe server. This is for sequencing data from the ONT
@@ -230,6 +230,7 @@ the data.fp below).
 
 ``` r
 # Set up pathway to python. We'll use this to run a script to check for the position of adapters and primers
+# If you don't know the path, in the terminal run "which python"
 python <- "/data/cliffb/miniforge3/bin/python"
 system2(python, args = "--version")
 
@@ -268,7 +269,6 @@ organizational purposes.
 ``` r
 project.fp <- "/data/cliffb/ONT_tutorial" # CHANGE ME to project directory; don't append with a "/"
 if (!dir.exists(project.fp)) dir.create(project.fp)
-setwd(project.fp) # Set the working directory to the project.fp. Log files written here.
 
 # Set up names of sub directories to stay organized
 Qstart.fp <- file.path(project.fp, "Qstart") # NanoPlot files, start
@@ -325,9 +325,9 @@ adapters, primers, or barcodes. Thank you to Matt and Mobeen for making
 this. It will tell you if the sequence is there and at what position.
 You can search for multiple sequences at once; just put a space between
 each sequence to search for. Here I’ll demonstrate a search for the
-outer Illumina adapters. We’ll search for the FWD, RC FWD, REV, and RC
-REV. The text output is printed and also saved as results.txt. It also
-makes folder called “output” with histograms.
+outer Illumina adapters. We’ll search for the i5, i7, RC i5, and RC i7
+sequences. The text output is printed and also saved as results.txt. It
+also makes folder called “output” with histograms.
 
 ``` r
 args <- c(paste0(project.fp, "/", "find_illumina_adapters.py"), # Path to script
@@ -347,7 +347,7 @@ constructs. Make sure you know your constructs! For 16S, 18S, and ITS,
 the information is on the Earth Microbiome Project site
 <https://earthmicrobiome.org/protocols-and-standards/>. In the Fierer
 Lab we follow the EMP exactly for 16S and 18S, but for ITS we use
-something else for the FWC construct, and EMP for the REV construct. For
+something else for the FWD construct, and EMP for the REV construct. For
 this tutorial run the 16S section, but if you are using ITS, run the ITS
 section below.
 
@@ -437,6 +437,52 @@ fnF.reorient <- file.path(reorient.fp, basename(fnF))
 adapter <- paste0(
   "'",
   "NNNNNNNNNNNNAGTCAGTCAGATGCTGCGTTCTTCATCGATGC;min_overlap=44...TTACTTCCTCTAAATGACCAAGCC;min_overlap=24",
+  "'"
+)
+R1.flags <- paste("-g", 
+                  adapter,
+                  "-e", 0.2) # Allow 0.2 error rate
+system2(cutadapt, args = c(R1.flags, 
+                           "--action=retain",
+                           "--buffer-size=1000000000",
+                           "--cores=16", # Use 16 cores for speed
+                           "--revcomp", 
+                           "-o", fnF.reorient, # Output 
+                           fnF, # Input
+                           ">", paste0(project.fp, "/", "cutadapt_reorient.log"))) # Save printed output text to a log file
+# Check cutadapt_reorient.log and see how many reads had adapters
+# cutadapt_reorient.log will be in your working directory
+# Go there in terminal and run less cutadapt_reorient.log
+# At the top will be a summary of how many reads had adapters
+# This number should be > 70%
+# You should also see that about (not exactly, but about) half have been reverse complemented (reoriented)
+# If not, run the find_illumina_adapters.py script to search for adapters, primers, barcodes etc. to check the constructs.
+```
+
+#### trnL
+
+``` r
+# N.B.! This is two step PCR - see the diagram that Matt made for more info.
+
+# Get the input files
+fnF <- data.fp
+
+# Make the output directory and paths
+if (!dir.exists(preprocess.fp)) dir.create(preprocess.fp)
+if (!dir.exists(reorient.fp)) dir.create(reorient.fp)
+fnF.reorient <- file.path(reorient.fp, basename(fnF))
+
+# Use the construct information and cutadapt to reorient reads to the same direction and trim the outer adapters
+# For trnL we need everything in reverse orientation so the barcodes are in the beginning
+# The first sequence is the the barcode (N) + RC of the i7 interior primer + rev overhang + REV primer 
+# The second sequence is the reverse complement of the forward overhang + i5 interior primer + FWD primer
+# "NNNNNNNNNNNNAGTCAGTCAGATGCTGCGTTCTTCATCGATGC;min_overlap=44...TTACTTCCTCTAAATGACCAAGCC;min_overlap=24",
+# min_overlap is set to the exact number of bases in the construct
+# Run cutadapt on the super accurate basecalling fastq file
+# This is tricky because we need a single quote around this -g argument, so make separately
+adapter <- paste0(
+  "'",
+"NNNNNNNNNNNNGTCTCGTGGGCTCGGAGATGTGTATAAGAGACAGCCATTGAGTCTCTGCACCTATC;min_overlap=68...CGTAGCGTCTACCGATTTCGCTGTCTCTTATACACATCTGACGCTGCCGACGAGCGATCTA;min_overlap=61",
   "'"
 )
 R1.flags <- paste("-g", 
@@ -570,7 +616,7 @@ fnFs.chopper <- gsub(".gz", "", fnFs.chopper) # Output is unzipped
 for (i in seq_along(fnFs)) {
   system2(chopper, 
           args = c("-i", fnFs[i], # Input
-                   "-t", 8, # Threads. Increase for speed.
+                   "-t", 16, # Threads. Increase for speed.
                    "-q", 30, # Minimum quality score
                    "--minlength", 250, # Minimum read length
                    "--maxlength", 400), # Maximum read length
@@ -593,7 +639,7 @@ list.files(chopper.fp)
 fnFs.chopper <- file.path(preprocess.fp, "chopper", basename(fnFs))
 
 # Now check mean Q score
-args <- c("-t", "8", "--fastq", paste0(chopper.fp, "/*.fastq.gz"), "-o", Qchopper.fp, "--no_static", "--plots", "dot")
+args <- c("-t", "16", "--fastq", paste0(chopper.fp, "/*.fastq.gz"), "-o", Qchopper.fp, "--no_static", "--plots", "dot")
 system2(NanoPlot, args = args)
 stats_chopper <- read.delim(paste0(Qchopper.fp, "/NanoStats.txt"))
 head(stats_chopper, n = 8)
@@ -630,7 +676,7 @@ filterAndTrim(fnFs.chopper, fnFs.filtN, maxN = 0, multithread = TRUE)
 # CHANGE multithread to FALSE on Windows (here and elsewhere in the program)
 
 # Now check mean Q score
-args <- c("-t", "8", "--fastq", paste0(filtN.fp, "/*.fastq.gz"), "-o", QfiltN.fp, "--no_static", "--plots", "dot")
+args <- c("-t", "16", "--fastq", paste0(filtN.fp, "/*.fastq.gz"), "-o", QfiltN.fp, "--no_static", "--plots", "dot")
 system2(NanoPlot, args = args)
 stats_filtN <- read.delim(paste0(QfiltN.fp, "/NanoStats.txt"))
 head(stats_filtN, n = 8)
@@ -663,6 +709,10 @@ standard 16S, 18S, and ITS primer sequences.
 **For ITS data:** `CTTGGTCATTTAGAGGAAGTAA` is the ITS forward primer
 sequence (ITS1F) and `GCTGCGTTCTTCATCGATGC` is ITS reverse primer
 sequence (ITS2)
+
+**For trnL data:** `CGAAATCGGTAGACGCTACG` is the trnL forward primer
+sequence (trnL c) and `CCATTGAGTCTCTGCACCTATC` is trnL reverse primer
+sequence (trnL h)
 
 ``` r
 # Detach the microseq package. We don't need it anymore and it causes trouble.
@@ -756,7 +806,7 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[8]]),
 
 ### Remove primers with cutadapt and assess the output
 
-Note: The flags are slightly different for 16S and ITS.
+Note: The flags are slightly different for 16S and ITS/trnL.
 
 ``` r
 # Create directory to hold the output from cutadapt
@@ -770,13 +820,13 @@ REV.RC <- dada2:::rc(REV)
 #  16S cutadapt flags
 R1.flags <- paste("-g", FWD, "-a", REV.RC, "--minimum-length 50") # Note the min length 50 won't do anything if you already filtered out short reads with chopper
 
-# ITS cutadapt flags (since reads are flipped)
+# ITS and trnL cutadapt flags (since reads are flipped)
 #R1.flags <- paste("-g", REV, "-a", FWD.RC, "--minimum-length 50") # Note the min length 50 won't do anything if you already filtered out short reads with chopper
 
-# Run cutadapt with 8 cores
+# Run cutadapt with 16 cores
 for (i in seq_along(fnFs)) {
     system2(cutadapt, args = c(R1.flags,
-                               "--cores=8",
+                               "--cores=16",
                                "-o", fnFs.cut[i], # output files
                                fnFs.filtN[i])) # input files
 }
@@ -833,7 +883,7 @@ fnFs.cut2 <- file.path(trimmed2.fp, basename(fnFs.filtN))
 
 for (i in seq_along(fnFs)) {
     system2(cutadapt, args = c(R1.flags,
-                               "--cores=8",
+                               "--cores=16",
                                "-o", fnFs.cut2[i], # output files
                                fnFs.cut[i])) # input files
 }
@@ -892,7 +942,7 @@ fnFs.cut3 <- file.path(trimmed3.fp, basename(fnFs.filtN))
 
 for (i in seq_along(fnFs)) {
     system2(cutadapt, args = c(R1.flags,
-                               "--cores=8",
+                               "--cores=16",
                                "-o", fnFs.cut3[i], # output files
                                fnFs.cut2[i])) # input files
 }
@@ -946,7 +996,7 @@ unlink(trimmed.fp, recursive = TRUE)
 unlink(trimmed2.fp, recursive = TRUE)
 
 # Now check mean Q score
-args <- c("-t", "8", "--fastq", paste0(trimmed3.fp, "/*.fastq.gz"), "-o", Qcut.fp, "--no_static", "--plots", "dot")
+args <- c("-t", "16", "--fastq", paste0(trimmed3.fp, "/*.fastq.gz"), "-o", Qcut.fp, "--no_static", "--plots", "dot")
 system2(NanoPlot, args = args)
 stats_cut <- read.delim(paste0(Qcut.fp, "/NanoStats.txt"))
 head(stats_cut, n = 8)
@@ -970,6 +1020,19 @@ head(stats_cut, n = 8)
 dir.create(filter.fp)
     subF.fp <- file.path(filter.fp, "preprocessed_F") 
 dir.create(subF.fp)
+
+# First see what samples had sequences. Some might have dropped! 
+list.files(trimmed3.fp)
+## [1] "BC001.fastq.gz" "BC002.fastq.gz" "BC003.fastq.gz" "BC004.fastq.gz"
+## [5] "BC005.fastq.gz" "BC006.fastq.gz" "BC007.fastq.gz" "BC008.fastq.gz"
+length(list.files(trimmed3.fp)) # Is this the same number you started with?
+## [1] 8
+# If not, remake the fnFs.cut3 object with the samples that still have reads
+# rm(fnFs.cut3)
+# fnFs.cut3 <- vector()
+# for (i in 1:length(list.files(trimmed3.fp))) {
+#   fnFs.cut3[i] <- paste0(trimmed3.fp, "/", list.files(trimmed3.fp)[i])
+# }
 
 # Move R1 from trimmed to separate new sub-directory
 fnFs.Q <- file.path(subF.fp,  basename(fnFs.cut3)) 
@@ -1026,7 +1089,7 @@ if( length(fastqFs) <= 20) {
 fwd_qual_plots
 ```
 
-<img src="figure/unnamed-chunk-18-1.png" width="98%" height="98%" />
+<img src="figure/unnamed-chunk-19-1.png" width="98%" height="98%" />
 
 ``` r
 # Optional: To make these quality plots interactive, call the plots through plotly
@@ -1087,7 +1150,7 @@ filt_out %>%
 # If very few reads made it through, go back and tweak your parameters.
 
 # Now check mean Q score
-args <- c("-t", "8", "--fastq", paste0(filtpathF, "/*.fastq.gz"), "-o", Qfiltered.fp, "--no_static", "--plots", "dot")
+args <- c("-t", "16", "--fastq", paste0(filtpathF, "/*.fastq.gz"), "-o", Qfiltered.fp, "--no_static", "--plots", "dot")
 system2(NanoPlot, args = args)
 stats_filtered <- read.delim(paste0(Qfiltered.fp, "/NanoStats.txt"))
 head(stats_filtered, n = 8)
@@ -1119,7 +1182,7 @@ fwd_qual_plots_filt <- plotQualityProfile(paste0(filtpathF, "/", remaining_sampl
 fwd_qual_plots_filt
 ```
 
-<img src="figure/unnamed-chunk-21-1.png" width="98%" height="98%" />
+<img src="figure/unnamed-chunk-22-1.png" width="98%" height="98%" />
 
 ``` r
 
@@ -1179,7 +1242,7 @@ errF_plot <- plotErrors(errF, nominalQ = TRUE)
 errF_plot
 ```
 
-<img src="figure/unnamed-chunk-24-1.png" width="98%" height="98%" />
+<img src="figure/unnamed-chunk-25-1.png" width="98%" height="98%" />
 
 ``` r
 # write error objects and plots to disk
@@ -1336,6 +1399,9 @@ database you need from this link
 - 18S protists (PR2 db):
   /db_files/dada2/pr2_version_5.0.0_SSU_dada2.fasta.gz
 
+- trnL plants (from Jonah):
+  /db_files/dada2/trnL_taxDB_20250217_dada2.fasta
+
 #### Revove chimeras
 
 ``` r
@@ -1365,9 +1431,9 @@ ncol(seqtab.nochim) # number of non-chimeric ASVs
 Note: assignTaxonomy implements the RDP Naive Bayesian Classifier
 algorithm described in Wang et al. Applied and Environmental
 Microbiology 2007, with kmer size 8 and 100 bootstrap replicates. For
-16S we use two steps to do species-level assignment. For ITS, use the
-below section, which does it all at once, but take the species IDs with
-a grain of salt.
+16S we use two steps to do species-level assignment. For ITS/trnL, use
+the below sections, which does it all at once, but take the species IDs
+with a grain of salt.
 
 #### 16S
 
@@ -1400,6 +1466,20 @@ saveRDS(tax, paste0(table.fp, "/tax_final.rds"))
 ``` r
 tax <- assignTaxonomy(seqs = seqtab.nochim, 
                       refFasta = "/db_files/dada2/sh_general_release_dynamic_19.02.2025.fasta", 
+                      minBoot = 50,
+                      tryRC = TRUE,
+                      outputBootstraps = FALSE,
+                      multithread = TRUE,
+                      verbose = FALSE)
+saveRDS(seqtab.nochim, paste0(table.fp, "/seqtab_final.rds"))
+saveRDS(tax, paste0(table.fp, "/tax_final.rds"))
+```
+
+#### trnL
+
+``` r
+tax <- assignTaxonomy(seqs = seqtab.nochim, 
+                      refFasta = "/db_files/dada2/trnL_taxDB_20250217_dada2.fasta", 
                       minBoot = 50,
                       tryRC = TRUE,
                       outputBootstraps = FALSE,
@@ -1662,7 +1742,7 @@ track_plot <- track %>%
 track_plot
 ```
 
-<img src="figure/unnamed-chunk-34-1.png" width="98%" height="98%" />
+<img src="figure/unnamed-chunk-36-1.png" width="98%" height="98%" />
 
 ``` r
 # Write results to disk
