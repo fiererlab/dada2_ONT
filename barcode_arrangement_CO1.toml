@@ -1,0 +1,19 @@
+[arrangement]
+name = "custom_barcode" # Leave this as is
+
+mask1_front = "" # Nothing. Barcode should be at the front of the reoriented reads
+mask1_rear = "AGTCAGTCAGCCWACTAATCAATTWCCAAATCCTCC" # CO1 reverse primer pad + linker + primer
+
+# Barcode sequences
+barcode1_pattern = "BC%03i" # Leave this as is
+first_index = 1 # Leave this as is
+last_index = 21 # CHANGE ME! Change to the total number of barcodes you have in the run.
+
+## Scoring options
+[scoring]
+max_barcode_penalty = 1 # Maybe change me. This is the number of mismatches allowed.
+min_barcode_penalty_dist = 1 # Maybe change me. How much better must the best option be compared to 2nd best.
+min_separation_only_dist = 100 # Don't change me. This is set to a high number so it is ignored.
+min_flank_score = 0.5 # Maybe change me. 0.5 is the default. Increase for a more stringent alignment with flank seqs.
+flank_left_pad = 0 # Don't change me. Setting to 0 means it will just use the barcode alignment and none of the flank seqs.
+flank_right_pad = 0 # Don't change me. Setting to 0 means it will just use the barcode alignment and none of the flank seqs.

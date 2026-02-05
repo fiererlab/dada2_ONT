@@ -4,7 +4,7 @@
 *This tutorial was made by Cliff Bueno de Mesquita based on the original
 MiSeq dada2 tutorial created by Angela Oliverio and Hannah
 Holland-Moritz. It is currently maintained by Cliff Bueno de Mesquita*  
-*Updated April 30th, 2025*
+*Updated February 5th, 2026*
 
 This pipeline runs the dada2 workflow for Big Data (single-end) from
 RStudio on the microbe server. This is for sequencing data from the ONT
@@ -19,7 +19,7 @@ the known community composition. For more information, see
 DO NOT use DADA2 if you did not perform super accurate basecalling, as
 the error rate will be too high. We will first use cutadapt to trim
 outer adapters and reorient the reads so they are in the same direction.
-Then we will use dorado to demultiplex the the reads into their separate
+Then we will use dorado to demultiplex the reads into their separate
 samples using barcodes.
 
 We suggest opening the dada2 tutorial online to understand more about
@@ -107,7 +107,7 @@ from github directly to the server, type the following into your
 terminal and hit return after each line.
 
 ``` bash
-wget https://github.com/fiererlab/dada2_fiererlab/archive/master.zip
+wget https://github.com/fiererlab/dada2_ONT/archive/master.zip
 unzip master.zip
 ```
 
@@ -134,7 +134,7 @@ If you are running it on your own computer (runs slower!):
     developed which are dorado 0.8.2, NanoPlot 1.44.0, chopper 0.8.0,
     cutadapt 4.9.
     - dorado can be downloaded from
-      <https://github.com/nanoporetech/dorado>
+      <https://cdn.oxfordnanoportal.com/software/analysis/dorado-0.8.2-linux-x64.tar.gz>
     - NanoPlot can be installed with pip (pip install NanoPlot=1.44.0)
     - chopper can be installed with conda (conda create -n chopper_env
       -c bioconda chopper=0.8.0)
@@ -236,7 +236,8 @@ system2(python, args = "--version")
 
 # Set up pathway to dorado (demultiplexing tool) and test
 # If you don't know the path, in the terminal run "which dorado"
-dorado <- "/data/cliffb/dorado-0.8.2-linux-x64/bin/dorado" # CHANGE ME to your path
+# For Fierer Lab members this is in /data/shared
+dorado <- "/data/shared/dorado-0.8.2-linux-x64/bin/dorado" # CHANGE ME to your path
 system2(dorado, args = "--version") # Check by running shell command from R
 
 # Set up pathway to NanoPlot (QC tool) and test
@@ -428,7 +429,7 @@ fnF.reorient <- file.path(reorient.fp, basename(fnF))
 
 # Use the construct information and cutadapt to reorient reads to the same direction and trim the outer adapters
 # For ITS we need everything in reverse orientation so the barcodes are in the beginning
-# The first sequence is the the barcode (N), reverse primer pad + linker + primer
+# The first sequence is the barcode (N), reverse primer pad + linker + primer
 # The second sequence is the reverse complement of the forward linker + primer
 # "NNNNNNNNNNNNAGTCAGTCAGATGCTGCGTTCTTCATCGATGC;min_overlap=44...TTACTTCCTCTAAATGACCAAGCC;min_overlap=24",
 # min_overlap is set to the exact number of bases in the construct
@@ -474,9 +475,8 @@ fnF.reorient <- file.path(reorient.fp, basename(fnF))
 
 # Use the construct information and cutadapt to reorient reads to the same direction and trim the outer adapters
 # For trnL we need everything in reverse orientation so the barcodes are in the beginning
-# The first sequence is the the barcode (N) + RC of the i7 interior primer + rev overhang + REV primer 
+# The first sequence is the barcode (N) + RC of the i7 interior primer + rev overhang + REV primer 
 # The second sequence is the reverse complement of the forward overhang + i5 interior primer + FWD primer
-# "NNNNNNNNNNNNAGTCAGTCAGATGCTGCGTTCTTCATCGATGC;min_overlap=44...TTACTTCCTCTAAATGACCAAGCC;min_overlap=24",
 # min_overlap is set to the exact number of bases in the construct
 # Run cutadapt on the super accurate basecalling fastq file
 # This is tricky because we need a single quote around this -g argument, so make separately
@@ -504,6 +504,49 @@ system2(cutadapt, args = c(R1.flags,
 # You should also see that about (not exactly, but about) half have been reverse complemented (reoriented)
 # If not, run the find_illumina_adapters.py script to search for adapters, primers, barcodes etc. to check the constructs.
 ```
+
+#### CO1
+````{r , eval = FALSE, include=TRUE}
+# Get the input files
+fnF <- data.fp
+
+# Make the output directory and paths
+if (!dir.exists(preprocess.fp)) dir.create(preprocess.fp)
+if (!dir.exists(reorient.fp)) dir.create(reorient.fp)
+fnF.reorient <- file.path(reorient.fp, basename(fnF))
+
+# Use the construct information and cutadapt to reorient reads to the same direction and trim the outer adapters
+# For CO1, it's similar to ITS, since the barcodes on on the reverse primers
+# The first sequence is the barcode (N), reverse primer pad + linker + primer
+# The second sequence is the reverse complement of the forward pad + linker + primer
+# "NNNNNNNNNNNNAGTCAGTCAGCCWACTAATCAATTWCCAAATCCTCC;min_overlap=48...CCAAAAATAAAATATAAWGTTCCAATATCTACGAGCACCGCA;min_overlap=42",
+# min_overlap is set to the exact number of bases in the construct
+# Run cutadapt on the super accurate basecalling fastq file
+# This is tricky because we need a single quote around this -g argument, so make separately
+adapter <- paste0(
+  "'",
+"NNNNNNNNNNNNAGTCAGTCAGCCWACTAATCAATTWCCAAATCCTCC;min_overlap=48...CCAAAAATAAAATATAAWGTTCCAATATCTACGAGCACCGCA;min_overlap=42",
+  "'"
+)
+R1.flags <- paste("-g", 
+                  adapter,
+                  "-e", 0.2) # Allow 0.2 error rate
+system2(cutadapt, args = c(R1.flags, 
+                           "--action=retain",
+                           "--buffer-size=1000000000",
+                           "--cores=16", # Use 16 cores for speed
+                           "--revcomp", 
+                           "-o", fnF.reorient, # Output 
+                           fnF, # Input
+                           ">", paste0(project.fp, "/", "cutadapt_reorient.log"))) # Save printed output text to a log file
+# Check cutadapt_reorient.log and see how many reads had adapters
+# cutadapt_reorient.log will be in your working directory
+# Go there in terminal and run less cutadapt_reorient.log
+# At the top will be a summary of how many reads had adapters
+# This number should be > 70%
+# You should also see that about (not exactly, but about) half have been reverse complemented (reoriented)
+# If not, run the find_illumina_adapters.py script to search for adapters, primers, barcodes etc. to check the constructs.
+````
 
 ### Demultiplex reads
 
@@ -534,7 +577,7 @@ make_demux_files <- function(file) {
 }
 
 # Make barcodes.fasta and barcodes_map.xlsx
-# mapping file path - Replace me with your barcode/sample ID mapping file path!
+# mapping file path - Replace me with your barcode/sampleID mapping file path!
 file <- "/data/shared/Nanopore/Zymo_positive_control_10_28_2024/11.01.2024_PositiveControl_MappingFile.xlsx"
 make_demux_files(file = file)
 
@@ -714,6 +757,8 @@ sequence (ITS2)
 sequence (trnL c) and `CCATTGAGTCTCTGCACCTATC` is trnL reverse primer
 sequence (trnL h)
 
+**For CO1 data:** ```AGATATTGGAACWTTATATTTTATTTTTGG``` is the CO1 forward primer sequence (CO1F) and ```WACTAATCAATTWCCAAATCCTCC``` is CO1 reverse primer sequence (CO1R)
+
 ``` r
 # Detach the microseq package. We don't need it anymore and it causes trouble.
 detach("package:microseq", unload=TRUE)
@@ -820,7 +865,7 @@ REV.RC <- dada2:::rc(REV)
 #  16S cutadapt flags
 R1.flags <- paste("-g", FWD, "-a", REV.RC, "--minimum-length 50") # Note the min length 50 won't do anything if you already filtered out short reads with chopper
 
-# ITS and trnL cutadapt flags (since reads are flipped)
+# ITS, trnL, CO1 cutadapt flags (since reads are flipped)
 #R1.flags <- paste("-g", REV, "-a", FWD.RC, "--minimum-length 50") # Note the min length 50 won't do anything if you already filtered out short reads with chopper
 
 # Run cutadapt with 16 cores
@@ -1401,6 +1446,9 @@ database you need from this link
 
 - trnL plants (from Jonah):
   /db_files/dada2/trnL_taxDB_20250217_dada2.fasta
+  
+    - CO1 arthropods (from Jonah): /db_files/dada2/BOLD_Public_COI_reformat_20250328_CB.fasta.gz
+  --Recommend using custom BLAST for CO1 though.
 
 #### Revove chimeras
 
@@ -1488,6 +1536,20 @@ tax <- assignTaxonomy(seqs = seqtab.nochim,
 saveRDS(seqtab.nochim, paste0(table.fp, "/seqtab_final.rds"))
 saveRDS(tax, paste0(table.fp, "/tax_final.rds"))
 ```
+
+#### CO1
+````{r eval = FALSE, include=TRUE}
+# Note: This has yielded a lot of NA assignments, so probably best to use Jonah's custom BLAST method instead
+tax <- assignTaxonomy(seqs = seqtab.nochim, 
+                      refFasta = "/db_files/dada2/BOLD_Public_COI_reformat_20250328_CB.fasta.gz", 
+                      minBoot = 50,
+                      tryRC = TRUE,
+                      outputBootstraps = FALSE,
+                      multithread = TRUE,
+                      verbose = FALSE)
+saveRDS(seqtab.nochim, paste0(table.fp, "/seqtab_final.rds"))
+saveRDS(tax, paste0(table.fp, "/tax_final.rds"))
+````
 
 ### 4. Optional - FORMAT OUTPUT to obtain ASV IDs and repset, and input for mctoolsr and phyloseq
 
