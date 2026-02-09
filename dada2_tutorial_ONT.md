@@ -556,14 +556,16 @@ it into a fasta file. We will make a list of generic names BC001, BC002
 etc. and write another mapping file for how those map to the original
 sample IDs. Then you’ll need to make or adjust the arrangement .toml
 file according to the settings you want and how many barcodes you have.
-Then, run dorado. We have included template 16S and ITS .toml files in
+Then, run dorado. We have included template 16S, ITS, trnL, and CO1 .toml files in
 the GitHub directory that you can adjust for your own projects. Note:
 For both 16S and ITS we use forward oriented barcodes. Even though for
 MiSeq we used to use RC ITS barcodes, we have actually reverse
 complemented those during the reorientation step, so for this step, use
-normal (not RC) barcodes.
+normal (not RC) barcodes. Your mapping file should have no column names and should have barcodes as column 1 and sampleIDs as column 2.
 
 ``` r
+# N.B.! Your mapping file should have no column names and should have barcodes as column 1 and sampleIDs as column 2.
+
 # Function for making the files
 make_demux_files <- function(file) {
   mf <- readxl::read_xlsx(file, sheet = 1, col_names = FALSE) %>%
