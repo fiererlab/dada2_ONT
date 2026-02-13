@@ -454,6 +454,7 @@ make_demux_files <- function(file) {
 }
 
 # Make barcodes.fasta and barcodes_map.xlsx
+# You will use barcodes_map.xlsx later when you make your metadata file!
 # mapping file path - Replace me with your barcode/sampleID mapping file path!
 file <- "/data/shared/Nanopore/Zymo_positive_control_10_28_2024/11.01.2024_PositiveControl_MappingFile.xlsx"
 make_demux_files(file = file)
