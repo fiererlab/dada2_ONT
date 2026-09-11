@@ -135,7 +135,7 @@ If you are running it on your own computer (runs slower!):
     cutadapt 4.9.
     - dorado can be downloaded from
       <https://cdn.oxfordnanoportal.com/software/analysis/dorado-0.8.2-linux-x64.tar.gz>
-    - NanoPlot can be installed with pip (pip install NanoPlot=1.44.0)
+    - NanoPlot can be installed with conda (conda create -n nanoplot_env -c bioconda NanoPlot=1.44.0)
     - chopper can be installed with conda (conda create -n chopper_env
       -c bioconda chopper=0.8.0)
     - cutadapt can be installed with conda (conda create -n cutadapt_env
@@ -242,7 +242,7 @@ system2(dorado, args = "--version") # Check by running shell command from R
 
 # Set up pathway to NanoPlot (QC tool) and test
 # If you don't know the path, in the terminal run "which NanoPlot"
-NanoPlot <- "/data/cliffb/miniforge3/bin/NanoPlot" # CHANGE ME to your path
+NanoPlot <- "/data/cliffb/miniforge3/envs/nanoplot_env/bin/NanoPlot" # CHANGE ME to your path
 system2(NanoPlot, args = "--version") # Check by running shell command from R
 
 # Set up pathway to chopper (read length and quality filter tool) and test

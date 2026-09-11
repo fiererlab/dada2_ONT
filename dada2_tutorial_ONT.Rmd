@@ -92,7 +92,7 @@ If you are running it on your own computer (runs slower!):
 2. Download the tutorial data from here [http://cme.colorado.edu/projects/bioinformatics-tutorials](http://cme.colorado.edu/projects/bioinformatics-tutorials)
 3. Install dorado, NanoPlot, cutadapt, chopper. This pipeline is only guaranteed to work using the versions with which it was first developed which are dorado 0.8.2, NanoPlot 1.44.0, chopper 0.8.0, cutadapt 4.9.
     - dorado can be downloaded from [https://cdn.oxfordnanoportal.com/software/analysis/dorado-0.8.2-linux-x64.tar.gz](https://cdn.oxfordnanoportal.com/software/analysis/dorado-0.8.2-linux-x64.tar.gz)
-    - NanoPlot can be installed with pip (pip install NanoPlot=1.44.0)
+    - NanoPlot can be installed with conda (conda create -n nanoplot_env -c bioconda NanoPlot=1.44.0)
     - chopper can be installed with conda (conda create -n chopper_env -c bioconda chopper=0.8.0)
     - cutadapt can be installed with conda (conda create -n cutadapt_env -c bioconda cutadapt=4.9)
 4. Download the most recent dada2-formatted reference database of your choice. Link to download here: [https://benjjneb.github.io/dada2/training.html](https://benjjneb.github.io/dada2/training.html)
@@ -169,7 +169,7 @@ system2(dorado, args = "--version") # Check by running shell command from R
 
 # Set up pathway to NanoPlot (QC tool) and test
 # If you don't know the path, in the terminal run "which NanoPlot"
-NanoPlot <- "/data/cliffb/miniforge3/bin/NanoPlot" # CHANGE ME to your path
+NanoPlot <- "/data/cliffb/miniforge3/envs/nanoplot_env/bin/NanoPlot" # CHANGE ME to your path
 system2(NanoPlot, args = "--version") # Check by running shell command from R
 
 # Set up pathway to chopper (read length and quality filter tool) and test
